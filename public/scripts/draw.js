@@ -36,13 +36,11 @@ const defaultFillStyle = '#181818';
 const defaultStrokeStyle = '#ccc';
 const ctx = canvas.getContext('2d');
 
-let elapsedInitial = NaN;
-let elapsedFinal = NaN;
-
 let observer;
 
 const walls = [];
 const observerRays = [];
+const observerRotationalVelocity = 1 * Math.PI;
 let segBounds;
 
 config: {
@@ -76,26 +74,39 @@ config: {
             )
         );
     }
+}
+
+function update(deltaTime) {
+    const dSec = Number.isNaN(deltaTime) ? 0 : deltaTime / 1000;
+    observer.angle += 1/4 * dSec * observerRotationalVelocity;
+
+    for (let ray of observerRays) {
+        if (util.inView(ray.v, observer)) continue;
+        observerRays.splice(observerRays.indexOf(ray), 1);
+    }
 
     segBounds = util.getLineSegmentsBounds(walls);
-    for (let info of Object.entries(segBounds)) {
-        observerRays.push([new Ray, ...info]);
+    for (let [bound, info] of segBounds.entries()) {
+        if (!util.inView(bound, observer)) continue;
+
+        const relative = Vector.subtract(bound, observer.position);
+
+        observerRays.push([
+            new Ray(observer.position, relative.angle),
+            info,
+            bound
+        ]);
     }
-    console.log(observerRays);
 }
 
-function update() {
-    observer.angle += Math.PI / 180;
-}
-
-function draw(ctx) {
+function draw(ctx, deltaTime) {
     ctx.globalAlpha = 0.5;
     ctx.fillRect(0, 0, width, height);
     ctx.globalAlpha = 1;
 
     ctx.fillStyle = '#fff';
     ctx.fillText(
-        `\u0394t: ${elapsedFinal - elapsedInitial} ms`,
+        `\u0394t: ${Math.round(deltaTime * 100) / 100} ms`,
         5,
         parseInt(ctx.font) + 5
     );
@@ -177,19 +188,52 @@ function draw(ctx) {
         ctx.stroke();
     }
 
-    /*
-    test: {}
-    */
+    
+    test: {
+        const { x, y } = observer.position;
+
+        ctx.beginPath();
+
+        for (let [ray, info, bound] of observerRays) {
+            ctx.moveTo(x, y);
+            ctx.lineTo(
+                x + 1000 * Math.cos(ray.angle),
+                y + 1000 * Math.sin(ray.angle),
+            );
+
+            ctx.moveTo(bound.x, bound.y);
+            ctx.arc(bound.x, bound.y, 10, 0, Math.PI * 2);
+        }
+
+        ctx.strokeStyle = '#0ff2';
+        ctx.stroke();
+        useDefaultStrokeStyle();
+    }
 
     ctx.restore();
 }
 
-setInterval(() => {
-    elapsedFinal = performance.now();
-    update();
-    draw(ctx);
-    elapsedInitial = performance.now();
-}, 1000/45);
+let previous;
+let isDone = false;
+
+function step(start) {
+    const deltaTime = start - previous ?? 0;
+
+    // while (performance.now() > 2000 && !isDone) {
+    //     for (let i = 0; i < 1e4; i++) { console.log(1); }
+    //     isDone = true;
+    // }
+
+    // deltaTime
+    // console.log(`\u0394t: ${deltaTime}`);
+    update(deltaTime);
+    draw(ctx, deltaTime);
+
+    previous = start;
+    frameCount = requestAnimationFrame(step);
+}
+
+let frameCount = requestAnimationFrame(step);
 
 { /* utils */ }
 

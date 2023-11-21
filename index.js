@@ -7,6 +7,8 @@ const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 const app = new Koa;
+const port = process.ENV?.PORT || 3003;
 app.use(serve('public'));
 
-app.listen(3003);
+console.log(`app listening on port ${port}`);
+app.listen(port);

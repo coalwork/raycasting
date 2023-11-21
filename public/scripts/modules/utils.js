@@ -50,16 +50,16 @@ export function intersectSS(
 
 export const getLineSegmentsBounds = (() => {
     const addSegment = (segment, bound, bsm) => {
-        if (!Array.isArray(bsm[bound]))
-            bsm[bound] = [];
+        if (!Array.isArray(bsm.get(bound)))
+            bsm.set(bound, []);
 
-        let segList = bsm[bound];
+        let segList = bsm.get(bound);
 
         segList.push(segment);
     };
 
     return function(segments) {
-        const boundSegmentMap = {};
+        const boundSegmentMap = new Map;
 
         for (let segment of segments) {
             const { v1, v2 } = segment;
@@ -80,4 +80,13 @@ export function isBetweenAngle(a, b, angle) {
         b + coterminal * (b < a),
         n + coterminal * (b < a && n < b)
     );
+}
+
+export function inView(bound, observer) {
+    if (!bound) return false;
+
+    const { angle: a, fov: f, position: p } = observer;
+    const relativeAngle = Vector.subtract(bound, p).angle;
+
+    return isBetweenAngle(a - f / 2, a + f / 2, relativeAngle);
 }
