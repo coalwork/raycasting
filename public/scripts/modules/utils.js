@@ -9,8 +9,12 @@ export function normalizeAngle(angle) {
 }
 
 export function lineBound(x1, x2, p) {
-    if (x1 > x2) return x2 <= p && p <= x1;
-    return x1 <= p && p <= x2;
+    const $ = round4Decimals;
+    const $x1 = $(x1);
+    const $x2 = $(x2);
+    const $p = $(p);
+    if ($x1 > $x2) return $x2 < $p && $p <= $x1;
+    return $x1 <= $p && $p <= $x2;
 }
 
 export function boxBound(v1, v2, { x, y }) {
@@ -48,6 +52,37 @@ export function intersectSS(
     return p;
 }
 
+export function intersectRS(
+    ray, { v1: c, v2: d }
+) {
+    const { v, angle } = ray;
+    const m1 = Math.tan(angle);
+    const m2 = (c.y - d.y) / (c.x - d.x);
+
+    if (m1 === m2
+        || !(Number.isFinite(m1) || Number.isFinite(m2)))
+        return null;
+
+    let x;
+    let y;
+
+    x = (m1 * v.x - m2 * c.x + c.y - v.y) / (m1 - m2);
+    y = m1 * (x - v.x) + v.y;
+    if (!Number.isFinite(m1)) {
+        x = v.x;
+        y = m2 * (x - c.x) + c.y;
+    } else if (!Number.isFinite(m2)) {
+        x = c.x;
+    }
+
+    const p = new Vector(x, y);
+    const { v1, v2 } = ray.toSegment();
+    if (!(boxBound(v1, v2, p) && boxBound(c, d, p)))
+        return null;
+
+    return p;
+}
+
 export const getLineSegmentsBounds = (() => {
     const addSegment = (segment, bound, bsm) => {
         if (!Array.isArray(bsm.get(bound)))
@@ -73,20 +108,26 @@ export const getLineSegmentsBounds = (() => {
 })();
 
 export function isBetweenAngle(a, b, angle) {
-    const coterminal = Math.PI * 2;
-    const n = normalizeAngle(angle);
-    return lineBound(
-        a,
-        b + coterminal * (b < a),
-        n + coterminal * (b < a && n < b)
-    );
+    return lineBound(a, b, angle);
 }
 
 export function inView(bound, observer) {
-    if (!bound) return false;
-
+    if (bound === undefined) return false;
     const { angle: a, fov: f, position: p } = observer;
     const relativeAngle = Vector.subtract(bound, p).angle;
+    const coterminal = Math.PI * 2;
 
-    return isBetweenAngle(a - f / 2, a + f / 2, relativeAngle);
+    let [j, k, l] = [a - f / 2, a + f / 2, relativeAngle];
+
+    if (a < 0 && j <= -Math.PI && l > 0) {
+        l -= coterminal;
+    } else if (a > 0 && k > Math.PI && l < 0) {
+        l += coterminal;
+    }
+
+    return isBetweenAngle(j, k, l);
+}
+
+export function round4Decimals(a) {
+    return Math.round(a * 1e4) / 1e4;
 }

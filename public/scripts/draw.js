@@ -39,9 +39,15 @@ const ctx = canvas.getContext('2d');
 let observer;
 
 const walls = [];
-const observerRays = [];
+const rayBoundMap = new Map;
+const rayIntersectionMap = new Map;
 const observerRotationalVelocity = 1 * Math.PI;
-let segBounds;
+const fovBorderlyVisible = {
+    left: null,
+    right: null
+};
+let wallsBoundsMap;
+let pastMouseVector = new Vector(NaN, NaN);
 
 config: {
     observer = new Observer(
@@ -50,8 +56,6 @@ config: {
         NaN,
         Math.PI / 2
     );
-
-    observer.lookAt(new Vector(0, 0));
 
     ctx.lineWidth = 2;
     ctx.font = '10px sans-serif';
@@ -74,28 +78,45 @@ config: {
             )
         );
     }
+
+    wallsBoundsMap = util.getLineSegmentsBounds(walls);
+
+    for (let bound of wallsBoundsMap.keys()) {
+        rayBoundMap.set(new Ray(observer.position, NaN), bound);
+    }
 }
 
 function update(deltaTime) {
     const dSec = Number.isNaN(deltaTime) ? 0 : deltaTime / 1000;
-    observer.angle += 1/4 * dSec * observerRotationalVelocity;
+    //observer.angle += 1/4 * dSec * observerRotationalVelocity;
+    if (Number.isNaN(observer.angle))
+        observer.lookAt(new Vector(0, 0));
 
-    for (let ray of observerRays) {
-        if (util.inView(ray.v, observer)) continue;
-        observerRays.splice(observerRays.indexOf(ray), 1);
+    observer.angle += (mouse.vector.x - (pastMouseVector?.x ?? 0)) * Math.PI / 180;
+    pastMouseVector = mouse.vector.copy();
+
+    let distLeft = Infinity;
+    let distRight = Infinity;
+
+    for (let wall of walls) {
+        const leftInter = util.intersectRS(observer.leftRay, wall);
+        const rightInter = util.intersectRS(observer.rightRay, wall);
+
+        left: {
+            if (!leftInter) break left;
+            if (leftInter.dist(observer.position) < distLeft)
+                fovBorderlyVisible.left = wall;
+        }
+
+        right: {
+            if (!rightInter) break right;
+            if (rightInter.dist(observer.position) < distRight)
+                fovBorderlyVisible.right = wall;
+        }
     }
 
-    segBounds = util.getLineSegmentsBounds(walls);
-    for (let [bound, info] of segBounds.entries()) {
-        if (!util.inView(bound, observer)) continue;
-
-        const relative = Vector.subtract(bound, observer.position);
-
-        observerRays.push([
-            new Ray(observer.position, relative.angle),
-            info,
-            bound
-        ]);
+    for (let [ray, bound] of rayBoundMap.entries()) {
+        ray.angle = Vector.subtract(bound, ray.v).angle;
     }
 }
 
@@ -190,24 +211,42 @@ function draw(ctx, deltaTime) {
 
     
     test: {
-        const { x, y } = observer.position;
-
-        ctx.beginPath();
-
-        for (let [ray, info, bound] of observerRays) {
-            ctx.moveTo(x, y);
-            ctx.lineTo(
-                x + 1000 * Math.cos(ray.angle),
-                y + 1000 * Math.sin(ray.angle),
-            );
-
-            ctx.moveTo(bound.x, bound.y);
-            ctx.arc(bound.x, bound.y, 10, 0, Math.PI * 2);
+        rays: {
+            const { x, y } = observer.position;
+            for (let [ray, bound] of rayBoundMap) {
+                const { v, angle: a } = ray;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(
+                    x + 1000 * Math.cos(a),
+                    y + 1000 * Math.sin(a)
+                );
+                ctx.strokeStyle = `#${util.inView(bound, observer) ? '0ff' : 'ff0'}2`;
+                ctx.stroke();
+            }
+            useDefaultStrokeStyle();
         }
 
-        ctx.strokeStyle = '#0ff2';
-        ctx.stroke();
-        useDefaultStrokeStyle();
+        fovRays: {
+            const { leftRay, rightRay } = observer;
+
+            ctx.beginPath();
+            for (let wall of walls) {
+                for (let ray of [leftRay, rightRay]) {
+                    const { v, angle: a } = ray;
+                    const { v2 } = ray.toSegment();
+                    const inter = util.intersectRS(ray, wall);
+
+                    if (!inter) continue;
+                    const { x, y } = inter;
+                    ctx.moveTo(x, y);
+                    ctx.arc(x, y, 10, 0, Math.PI * 2);
+                }
+            }
+            ctx.strokeStyle = '#fff2';
+            ctx.stroke();
+            useDefaultFillStyle();
+        }
     }
 
     ctx.restore();

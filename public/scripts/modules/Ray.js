@@ -12,11 +12,11 @@ export default class Ray {
 
     has(p) {
         const { v, angle } = this;
-        return Vector.equals(v, p)
+        return Vector.equal(v, p)
             || Vector.subtract(p, v).angle === angle;
     }
 
-    toSegment(mag = 1e6) {
+    toSegment(mag = 1e3) {
         const { v, angle } = this;
         const relative = Vector.fromAngle(angle);
         relative.magnitude = mag;
